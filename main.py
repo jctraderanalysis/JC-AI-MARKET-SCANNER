@@ -1,74 +1,72 @@
 import time
 import datetime
-import threading
+import pytz
+import requests
 import config
-from scanner import analyze_symbol
-from notifier import notify_startup, send_telegram_msg, send_email_report
 
-sent_signals = set()
+# Configuración de Telegram
+TELEGRAM_BOT_TOKEN = getattr(config, 'TELEGRAM_BOT_TOKEN', '')
+TELEGRAM_CHAT_ID = getattr(config, 'TELEGRAM_CHAT_ID', '')
 
-def scan_loop():
-    """Función para ejecutar el escaneo en segundo plano."""
-    print("Iniciando JC AI MARKET SCANNER PRO...")
-    notify_startup()
+# Control de estados para no repetir alertas
+market_states = {
+    "FOREX": None,
+    "STOCKS": None,
+    "INDICES": None
+}
 
-    while True:
-        try:
-            print(f"\n--- Escaneando Mercado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
-            
-            bullish_signals = []
-            bearish_signals = []
+def send_telegram_alert(message: str):
+    """Envia un mensaje directo a tu Telegram."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("[!] Token o Chat ID de Telegram no configurados.")
+        return
 
-            all_symbols = []
-            for category in config.SYMBOLS.values():
-                all_symbols.extend(category)
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"[!] Error enviando alerta a Telegram: {e}")
 
-            for symbol in set(all_symbols):
-                signal = analyze_symbol(symbol)
-                if signal:
-                    sig_key = f"{symbol}_{signal['type']}_{signal['price']}"
-                    if sig_key not in sent_signals:
-                        sent_signals.add(sig_key)
-                        if signal['type'] == "COMPRA":
-                            bullish_signals.append(signal)
-                        else:
-                            bearish_signals.append(signal)
+def check_market_schedules():
+    """Verifica aperturas y cierres de mercado en tiempo de Puerto Rico (AST)."""
+    tz_ast = pytz.timezone('America/Puerto_Rico')
+    now = datetime.datetime.now(tz_ast)
+    weekday = now.weekday() # 0 = Lunes, 5 = Sábado, 6 = Domingo
+    hour = now.hour
+    minute = now.minute
 
-            # Enviar reportes agrupados
-            if bullish_signals:
-                msg_tg = "<b>🟢 MERCADO ALCISTA - OPORTUNIDADES</b>\n\n"
-                email_body = "MERCADO WALLSTREET ALCISTA\n\n"
-                for s in bullish_signals:
-                    msg_tg += f"<b>{s['symbol']}</b> | COMPRA | Entrada: {s['price']}\nConfianza: {s['confidence']}% | RSI: {s['rsi']}\nMotivo: {s['reason']}\n\n"
-                    email_body += f"{s['symbol']} - COMPRA - Entrada: {s['price']} - RSI: {s['rsi']}\n"
-                
-                send_telegram_msg(msg_tg)
-                send_email_report("MERCADO WALLSTREET ALCISTA", email_body)
+    # 1. ESTADO FOREX (Abre Dom 5:00 PM - Cierra Vie 5:00 PM)
+    forex_open = not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 17))
+    if market_states["FOREX"] is not None and market_states["FOREX"] != forex_open:
+        if forex_open:
+            send_telegram_alert("🟢 **🚨 ¡ALERTA DE APERTURA!**\n\nEl mercado de **FOREX** acaba de abrir. Iniciando escaneo de H4, H1 y M5...")
+        else:
+            send_telegram_alert("🔴 **💤 MERCADO CERRADO**\n\nEl mercado de **FOREX** ha cerrado por el fin de semana. No se buscarán entradas hasta el domingo 5:00 PM AST.")
+    market_states["FOREX"] = forex_open
 
-            if bearish_signals:
-                msg_tg = "<b>🔴 MERCADO BAJISTA - OPORTUNIDADES</b>\n\n"
-                email_body = "MERCADO WALLSTREET BAJISTA\n\n"
-                for s in bearish_signals:
-                    msg_tg += f"<b>{s['symbol']}</b> | VENTA | Entrada: {s['price']}\nConfianza: {s['confidence']}% | RSI: {s['rsi']}\nMotivo: {s['reason']}\n\n"
-                    email_body += f"{s['symbol']} - VENTA - Entrada: {s['price']} - RSI: {s['rsi']}\n"
-                
-                send_telegram_msg(msg_tg)
-                send_email_report("MERCADO WALLSTREET BAJISTA", email_body)
+    # 2. ESTADO ACCIONES (Abre Lun-Vie 9:30 AM - Cierra 4:00 PM)
+    stocks_open = not (weekday in [5, 6] or hour < 9 or (hour == 9 and minute < 30) or hour >= 16)
+    if market_states["STOCKS"] is not None and market_states["STOCKS"] != stocks_open:
+        if stocks_open:
+            send_telegram_alert("🟢 **🚨 ¡ALERTA DE APERTURA!**\n\nLa bolsa de Wall Street (**Acciones**) acaba de abrir sus puertas. Escaneando oportunidades...")
+        else:
+            send_telegram_alert("🔴 **💤 MERCADO CERRADO**\n\nLa bolsa de Wall Street (**Acciones**) ha cerrado sesión por hoy.")
+    market_states["STOCKS"] = stocks_open
 
-        except Exception as e:
-            print(f"[!] Error en bucle de escaneo: {e}")
-
-        time.sleep(config.SCAN_INTERVAL_SECONDS)
+    # 3. ESTADO ÍNDICES (Abre Dom 6:00 PM - Cierra Vie 5:00 PM)
+    indices_open = not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 18))
+    if market_states["INDICES"] is not None and market_states["INDICES"] != indices_open:
+        if indices_open:
+            send_telegram_alert("🟢 **🚨 ¡ALERTA DE APERTURA!**\n\nEl mercado de **ÍNDICES** (S&P500 / Nasdaq) acaba de abrir.")
+        else:
+            send_telegram_alert("🔴 **💤 MERCADO CERRADO**\n\nEl mercado de **ÍNDICES** ha cerrado.")
+    market_states["INDICES"] = indices_open
 
 def start_background_scanner():
-    """Inicia el hilo secundario para el escáner si no está corriendo."""
-    # Verificar si el hilo ya fue iniciado para no duplicarlo
-    for thread in threading.enumerate():
-        if thread.name == "JC_Scanner_Thread":
-            return
-    
-    t = threading.Thread(target=scan_loop, name="JC_Scanner_Thread", daemon=True)
-    t.start()
-
-if __name__ == "__main__":
-    scan_loop()
+    """Ejecuta el monitoreo en segundo plano."""
+    check_market_schedules()
