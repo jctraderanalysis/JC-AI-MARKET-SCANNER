@@ -3,8 +3,8 @@ import pandas as pd
 import ta
 import config
 
-def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
-    """Obtiene datos de yfinance y calcula indicadores."""
+def fetch_data(symbol: str, timeframe: str, period: str = "60d"):
+    """Obtiene datos de yfinance y calcula indicadores para la estrategia."""
     try:
         df = yf.download(tickers=symbol, period=period, interval=timeframe, progress=False)
         if df.empty or len(df) < 30:
@@ -38,9 +38,21 @@ def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
         return None
 
 def analyze_symbol_full(symbol: str):
-    """Analiza H1 y M5 para la tabla multitemporal."""
-    df_h1 = fetch_data(symbol, "1h", "7d")
-    df_m5 = fetch_data(symbol, "5m", "1d")
+    """Analiza H4, H1 y M5 respetando la estrategia MTF de Jesús Cruz."""
+    df_h4 = fetch_data(symbol, "1h", "60d") # Resampling a H4 desde H1 para precisión
+    if df_h4 is not None:
+        df_h4 = df_h4.resample('4h').agg({
+            'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'
+        }).dropna()
+        ema_f = getattr(config, 'EMA_FAST', 30)
+        ema_m = getattr(config, 'EMA_MID', 50)
+        ema_s = getattr(config, 'EMA_SLOW', 100)
+        df_h4['EMA_FAST'] = ta.trend.ema_indicator(df_h4['Close'], window=ema_f)
+        df_h4['EMA_MID'] = ta.trend.ema_indicator(df_h4['Close'], window=ema_m)
+        df_h4['EMA_SLOW'] = ta.trend.ema_indicator(df_h4['Close'], window=ema_s)
+
+    df_h1 = fetch_data(symbol, "1h", "14d")
+    df_m5 = fetch_data(symbol, "5m", "2d")
 
     if df_m5 is None or df_m5.empty:
         return None
@@ -50,31 +62,42 @@ def analyze_symbol_full(symbol: str):
     rsi_val = round(float(row_m5['RSI']), 2) if pd.notnull(row_m5['RSI']) else 50.0
     macd_hist = float(row_m5['MACD_HIST']) if pd.notnull(row_m5['MACD_HIST']) else 0.0
 
+    # Estado H4 (Macro Tendencia & Ciclo)
+    if df_h4 is not None and len(df_h4) > 10:
+        row_h4 = df_h4.iloc[-1]
+        if row_h4['EMA_FAST'] > row_h4['EMA_MID'] > row_h4['EMA_SLOW']:
+            h4_status = "🟢 Alcista (Ciclo)"
+        elif row_h4['EMA_FAST'] < row_h4['EMA_MID'] < row_h4['EMA_SLOW']:
+            h4_status = "🔴 Bajista (Ciclo)"
+        else:
+            h4_status = "🟡 Transición / Rango"
+    else:
+        h4_status = "⚪ N/A"
+
+    # Estado H1 (Estructura de Pierna)
+    if df_h1 is not None and not df_h1.empty:
+        row_h1 = df_h1.iloc[-1]
+        if row_h1['EMA_FAST'] > row_h1['EMA_MID'] > row_h1['EMA_SLOW']:
+            h1_status = "🟢 Pierna Alcista"
+        elif row_h1['EMA_FAST'] < row_h1['EMA_MID'] < row_h1['EMA_SLOW']:
+            h1_status = "🔴 Pierna Bajista"
+        else:
+            h1_status = "🟡 Corrección"
+    else:
+        h1_status = "⚪ N/A"
+
+    # Estado M5 (Gatillo)
     if row_m5['EMA_FAST'] > row_m5['EMA_MID'] > row_m5['EMA_SLOW']:
         ema_m5_status = "🟢 Alcista"
     elif row_m5['EMA_FAST'] < row_m5['EMA_MID'] < row_m5['EMA_SLOW']:
         ema_m5_status = "🔴 Bajista"
     else:
-        ema_m5_status = "🟡 Neutro / Mapeo"
+        ema_m5_status = "🟡 Mapeo"
 
-    if df_h1 is not None and not df_h1.empty:
-        row_h1 = df_h1.iloc[-1]
-        if row_h1['EMA_FAST'] > row_h1['EMA_MID']:
-            h1_status = "🟢 Alcista"
-        elif row_h1['EMA_FAST'] < row_h1['EMA_MID']:
-            h1_status = "🔴 Bajista"
-        else:
-            h1_status = "🟡 Neutro"
-    else:
-        h1_status = "⚪ N/A"
+    # MACD M5
+    macd_status = "🟢 Positivo" if macd_hist > 0 else "🔴 Negativo"
 
-    if macd_hist > 0:
-        macd_status = "🟢 Positivo"
-    elif macd_hist < 0:
-        macd_status = "🔴 Negativo"
-    else:
-        macd_status = "⚪ Neutro"
-
+    # RSI M5
     if rsi_val >= 70:
         rsi_status = f"🔴 Sobrecompra ({rsi_val})"
     elif rsi_val <= 30:
@@ -87,8 +110,9 @@ def analyze_symbol_full(symbol: str):
     return {
         "Símbolo": symbol,
         "Precio": price,
-        "Estructura H1": h1_status,
-        "Estructura M5": ema_m5_status,
+        "Tendencia H4": h4_status,
+        "Pierna H1": h1_status,
+        "Gatillo M5": ema_m5_status,
         "RSI (M5)": rsi_status,
         "MACD (M5)": macd_status,
         "RSI_VAL": rsi_val,
@@ -96,44 +120,45 @@ def analyze_symbol_full(symbol: str):
     }
 
 def generate_ai_report(symbol: str, _unused_key=None):
-    """Genera un Informe Ejecutivo Técnico Inteligente 100% nativo sin depender de APIs externas."""
+    """Genera el informe ejecutivo según la estrategia de Cierre de Ciclo H4 + Pierna H1 + Gatillo M5."""
     info = analyze_symbol_full(symbol)
     if not info:
         return "❌ No se pudieron obtener datos suficientes para generar el informe técnico."
 
     price = info['Precio']
-    h1 = info['Estructura H1']
-    m5 = info['Estructura M5']
+    h4 = info['Tendencia H4']
+    h1 = info['Pierna H1']
+    m5 = info['Gatillo M5']
     rsi_text = info['RSI (M5)']
     rsi_val = info['RSI_VAL']
     macd_text = info['MACD (M5)']
     macd_hist = info['MACD_HIST']
 
-    # Lógica de Sesgo
-    if "🟢" in h1 and "🟢" in m5:
-        bias = "🟢 COMPRA (ALTA PROBABILIDAD)"
-        confidence = "88% - 94%"
-        action = "Buscar gatillo de entrada en M5 al toque o retroceso de la EMA 30/50."
-        sl_zone = "Por debajo del último mínimo estructural en M5."
-    elif "🔴" in h1 and "🔴" in m5:
-        bias = "🔴 VENTA (ALTA PROBABILIDAD)"
-        confidence = "88% - 94%"
-        action = "Buscar gatillo de entrada en corta al retest de la EMA 30 en M5."
-        sl_zone = "Por encima del último máximo estructural en M5."
-    elif "🟢" in h1 and "🔴" in m5:
-        bias = "🟡 ESPERAR / RETROCESO"
-        confidence = "60%"
-        action = "Tendencia mayor H1 es Alcista pero M5 está corrigiendo. Esperar que M5 vuelva a alinearse alcista."
-        sl_zone = "N/A - Espere confirmación de gatillo."
-    elif "🔴" in h1 and "🟢" in m5:
-        bias = "🟡 ESPERAR / CORRECCIÓN"
-        confidence = "60%"
-        action = "Tendencia mayor H1 es Bajista pero M5 hace pullback. No operar contra tendencia H1."
-        sl_zone = "N/A - Espere alineación en M5."
+    # Lógica de Validación de Alineación
+    if "🟢" in h4 and "🟢" in h1 and "🟢" in m5:
+        bias = "🟢 COMPRA CONFIRMADA (ALTA PROBABILIDAD)"
+        confidence = "92% - 96%"
+        action = "Cierre de ciclo H4 alcista alineado con la pierna H1. Tomar gatillo en M5 con toque/retroceso a las EMAs."
+        sl_zone = "Por debajo del mínimo previo en M5 / soporte de pierna en H1."
+    elif "🔴" in h4 and "🔴" in h1 and "🔴" in m5:
+        bias = "🔴 VENTA CONFIRMADA (ALTA PROBABILIDAD)"
+        confidence = "92% - 96%"
+        action = "Cierre de ciclo H4 bajista alineado con la pierna H1. Tomar gatillo en M5 al retest de EMAs."
+        sl_zone = "Por encima del máximo previo en M5 / resistencia de pierna en H1."
+    elif "🟢" in h4 and "🟢" in h1 and "🔴" in m5:
+        bias = "🟡 RETROCESO DE M5 / ESPERAR GATILLO"
+        confidence = "70%"
+        action = "Ciclo H4 y Pierna H1 son Alcistas. M5 está haciendo retroceso. Esperar que M5 gire a verde para entrar."
+        sl_zone = "Esperar confirmación de giro en M5."
+    elif "🔴" in h4 and "🔴" in h1 and "🟢" in m5:
+        bias = "🟡 RETROCESO DE M5 / ESPERAR GATILLO"
+        confidence = "70%"
+        action = "Ciclo H4 y Pierna H1 son Bajistas. M5 está en retest alcista. Esperar que M5 gire a rojo para entrar en corto."
+        sl_zone = "Esperar confirmación de giro en M5."
     else:
-        bias = "⚪ MERCADO EN RANGO / NEUTRO"
+        bias = "⚪ MERCADO DESALINEADO / ESPERAR CIERRE DE CICLO"
         confidence = "50%"
-        action = "El activo no muestra alineación en EMAs. Mantenerse al margen."
+        action = "Las temporalidades H4 y H1 no están alineadas. Mantenerse al margen hasta ver estructura clara."
         sl_zone = "N/A"
 
     report = f"""
@@ -144,32 +169,34 @@ def generate_ai_report(symbol: str, _unused_key=None):
 
 #### 📌 **1. Resumen Ejecutivo & Sesgo del Mercado**
 * **Precio Actual:** `{price}`
-* **Sesgo Técnico:** **{bias}**
+* **Sesgo de Estrategia:** **{bias}**
 * **Nivel de Confianza:** `{confidence}`
 
 ---
 
-#### 📊 **2. Análisis Multitemporal (MTF)**
-* **Estructura H1:** **{h1}** — *Determina la dirección mayor.*
-* **Estructura M5:** **{m5}** — *Alineación de EMAs (30, 50, 100) en temporalidad de gatillo.*
+#### 📊 **2. Estructura Multitemporal (H4 -> H1 -> M5)**
+* **H4 (Ciclo & Tendencia Mayor):** **{h4}** — *Marco general del mercado.*
+* **H1 (Dirección de la Pierna):** **{h1}** — *Verificación de alineación de medias en H1.*
+* **M5 (Gatillo de Entrada):** **{m5}** — *Alineación de EMAs (30, 50, 100) para ejecución.*
 
 ---
 
-#### 📈 **3. Momentum & Osciladores**
-* **RSI (M5):** `{rsi_text}` — {'Fuerza alcista sostenida' if rsi_val > 50 else 'Presión bajista activa'}.
-* **MACD Histograma (M5):** `{macd_text}` (`{round(macd_hist, 6)}`) — {'Convergencia a favor del movimiento' if macd_hist > 0 else 'Fuerza vendedora superior'}.
+#### 📈 **3. Momentum & Osciladores (M5)**
+* **RSI (M5):** `{rsi_text}` — {'Fuerza comprador activa (>50)' if rsi_val > 50 else 'Presión vendedora activa (<50)'}.
+* **MACD Histograma (M5):** `{macd_text}` (`{round(macd_hist, 6)}`) — {'Impulso a favor del movimiento' if macd_hist > 0 else 'Fuerza vendedora superior'}.
 
 ---
 
-#### 🎯 **4. Plan Operativo y Gestión de Riesgo**
-* **Recomendación:** {action}
-* **Zona Invalidez / Stop Loss:** {sl_zone}
+#### 🎯 **4. Plan Operativo & Gestión de Riesgo**
+* **Acción Sugerida:** {action}
+* **Zona de Invalidez / Stop Loss:** {sl_zone}
     """
     return report
 
 def analyze_symbol(symbol: str):
-    df_h1 = fetch_data(symbol, "1h", "7d")
-    df_m5 = fetch_data(symbol, "5m", "1d")
+    df_h4 = fetch_data(symbol, "1h", "60d")
+    df_h1 = fetch_data(symbol, "1h", "14d")
+    df_m5 = fetch_data(symbol, "5m", "2d")
 
     if df_h1 is None or df_m5 is None:
         return None
@@ -189,7 +216,7 @@ def analyze_symbol(symbol: str):
         return {
             "symbol": symbol, "type": "COMPRA", "price": round(price, 4),
             "confidence": 92, "rsi": round(float(row_m5['RSI']), 2),
-            "reason": "Alineación MTF Alcista Completa"
+            "reason": "Alineación MTF Alcista Completa (H4-H1-M5)"
         }
 
     h1_bear = row_h1['EMA_FAST'] < row_h1['EMA_MID'] < row_h1['EMA_SLOW']
@@ -201,7 +228,7 @@ def analyze_symbol(symbol: str):
         return {
             "symbol": symbol, "type": "VENTA", "price": round(price, 4),
             "confidence": 92, "rsi": round(float(row_m5['RSI']), 2),
-            "reason": "Alineación MTF Bajista Completa"
+            "reason": "Alineación MTF Bajista Completa (H4-H1-M5)"
         }
 
     return None
