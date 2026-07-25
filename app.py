@@ -25,18 +25,25 @@ def is_forex_open(): return not (weekday == 5 or (weekday == 4 and hour >= 17) o
 def is_indices_open(): return not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 18))
 def is_stocks_open(): return not (weekday in [5, 6] or hour < 9 or (hour == 9 and now_ast.minute < 30) or hour >= 16)
 
-# Función para dar formato de colores a las celdas
+# Función para dar formato de colores a las celdas (Compatible con Pandas moderno)
 def style_dataframe(df):
     def highlight_status(val):
-        if "🟢" in str(val):
+        val_str = str(val)
+        if "🟢" in val_str:
             return "background-color: #d4edda; color: #155724; font-weight: bold;"
-        elif "🔴" in str(val):
+        elif "🔴" in val_str:
             return "background-color: #f8d7da; color: #721c24; font-weight: bold;"
-        elif "🟡" in str(val):
+        elif "🟡" in val_str:
             return "background-color: #fff3cd; color: #856404; font-weight: bold;"
         return ""
 
-    return df.style.applymap(highlight_status, subset=["Estructura H1", "Estructura M5", "RSI (M5)", "MACD (M5)"])
+    # Usamos .map() en lugar de .applymap() para evitar la incompatibilidad
+    try:
+        styler = df.style.map(highlight_status, subset=["Estructura H1", "Estructura M5", "RSI (M5)", "MACD (M5)"])
+    except AttributeError:
+        styler = df.style.applymap(highlight_status, subset=["Estructura H1", "Estructura M5", "RSI (M5)", "MACD (M5)"])
+    
+    return styler
 
 def build_market_table(symbols):
     data = []
