@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 import ta
 import config
-from google import genai
+import google.generativeai as genai
 
 def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
     """Obtiene datos de yfinance y calcula indicadores."""
@@ -121,11 +121,9 @@ def generate_ai_report(symbol: str, api_key: str):
     """
 
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt
-        )
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt)
         return response.text
     except Exception as e:
         return f"⚠️ Error al conectar con la IA de Gemini: {e}"
