@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import ta
 import config
+from google import genai
 
 def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
     """Obtiene datos de yfinance y calcula indicadores."""
@@ -13,20 +14,15 @@ def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # Cargar parámetros o defaults
         ema_f = getattr(config, 'EMA_FAST', 30)
         ema_m = getattr(config, 'EMA_MID', 50)
         ema_s = getattr(config, 'EMA_SLOW', 100)
 
-        # EMAs
         df['EMA_FAST'] = ta.trend.ema_indicator(df['Close'], window=ema_f)
         df['EMA_MID'] = ta.trend.ema_indicator(df['Close'], window=ema_m)
         df['EMA_SLOW'] = ta.trend.ema_indicator(df['Close'], window=ema_s)
-
-        # RSI
         df['RSI'] = ta.momentum.rsi(df['Close'], window=getattr(config, 'RSI_PERIOD', 14))
 
-        # MACD
         macd_obj = ta.trend.MACD(
             close=df['Close'],
             window_slow=getattr(config, 'MACD_SLOW', 26),
@@ -43,8 +39,7 @@ def fetch_data(symbol: str, timeframe: str, period: str = "5d"):
         return None
 
 def analyze_symbol_full(symbol: str):
-    """Analiza H4, H1 y M5 para la tabla multitemporal."""
-    df_h4 = fetch_data(symbol, "1h", "14d") # Simulación/Cálculo H4 o H1
+    """Analiza H1 y M5 para la tabla multitemporal."""
     df_h1 = fetch_data(symbol, "1h", "7d")
     df_m5 = fetch_data(symbol, "5m", "1d")
 
@@ -56,7 +51,6 @@ def analyze_symbol_full(symbol: str):
     rsi_val = round(float(row_m5['RSI']), 2) if pd.notnull(row_m5['RSI']) else 50.0
     macd_hist = float(row_m5['MACD_HIST']) if pd.notnull(row_m5['MACD_HIST']) else 0.0
 
-    # Determinar estado de EMAs en M5
     if row_m5['EMA_FAST'] > row_m5['EMA_MID'] > row_m5['EMA_SLOW']:
         ema_m5_status = "🟢 Alcista"
     elif row_m5['EMA_FAST'] < row_m5['EMA_MID'] < row_m5['EMA_SLOW']:
@@ -64,7 +58,6 @@ def analyze_symbol_full(symbol: str):
     else:
         ema_m5_status = "🟡 Neutro / Mapeo"
 
-    # Determinar estado H1
     if df_h1 is not None and not df_h1.empty:
         row_h1 = df_h1.iloc[-1]
         if row_h1['EMA_FAST'] > row_h1['EMA_MID']:
@@ -76,7 +69,6 @@ def analyze_symbol_full(symbol: str):
     else:
         h1_status = "⚪ N/A"
 
-    # Determinar estado MACD
     if macd_hist > 0:
         macd_status = "🟢 Positivo"
     elif macd_hist < 0:
@@ -84,7 +76,6 @@ def analyze_symbol_full(symbol: str):
     else:
         macd_status = "⚪ Neutro"
 
-    # Estado RSI
     if rsi_val >= 70:
         rsi_status = f"🔴 Sobrecompra ({rsi_val})"
     elif rsi_val <= 30:
@@ -103,8 +94,43 @@ def analyze_symbol_full(symbol: str):
         "MACD (M5)": macd_status,
     }
 
+def generate_ai_report(symbol: str, api_key: str):
+    """Envía los datos técnicos a Gemini para redactar un informe profesional de IA."""
+    info = analyze_symbol_full(symbol)
+    if not info:
+        return "❌ No se pudieron obtener datos técnicos suficientes para generar el reporte de IA."
+
+    prompt = f"""
+    Eres el asistente oficial de análisis de trading para 'JC AI MARKET SCANNER PRO' (Copyright 2026, JESUS CRUZ).
+    Genera un informe técnico ejecutivo y detallado para el activo: {symbol}.
+
+    DATOS TÉCNICOS EN TIEMPO REAL:
+    - Precio Actual: {info['Precio']}
+    - Estructura Tendencial H1: {info['Estructura H1']}
+    - Estructura Tendencial M5: {info['Estructura M5']}
+    - Lectura de RSI (M5): {info['RSI (M5)']}
+    - Lectura de MACD (M5): {info['MACD (M5)']}
+
+    ESTRUCTURA DEL REPORTE SOLICITADO:
+    1. 📌 **Resumen Ejecutivo**: Sesgo actual (COMPRA, VENTA o ESPERAR) y nivel de confianza.
+    2. 📊 **Análisis Multitemporal (MTF)**: Evaluación de alineación entre H1 y M5 (EMAs 30, 50, 100).
+    3. 📈 **Momentum y Osciladores**: Análisis de convergencia/divergencia entre RSI y MACD.
+    4. 🎯 **Plan Operativo y Gestión de Riesgo**: Puntos clave de entrada, zonas de invalidez (Stop Loss) y objetivos probables.
+
+    Utiliza un tono profesional, claro, bien formateado con viñetas y emojis.
+    """
+
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        return f"⚠️ Error al conectar con la IA de Gemini: {e}"
+
 def analyze_symbol(symbol: str):
-    # Función que usa el bot de background
     df_h1 = fetch_data(symbol, "1h", "7d")
     df_m5 = fetch_data(symbol, "5m", "1d")
 
