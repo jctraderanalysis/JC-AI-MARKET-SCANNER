@@ -20,12 +20,6 @@ hour = now_ast.hour
 
 st.write(f"🕒 **Hora actual (Puerto Rico):** {now_ast.strftime('%Y-%m-%d %I:%M:%S %p AST')}")
 
-# Configurar API Key de Gemini en el Sidebar
-with st.sidebar:
-    st.header("⚙️ Configuración de IA")
-    gemini_key = st.text_input("Ingresa tu Gemini API Key (Gratis):", type="password")
-    st.caption("Consigue tu clave en: [aistudio.google.com](https://aistudio.google.com/app/apikey)")
-
 def is_crypto_open(): return True
 def is_forex_open(): return not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 17))
 def is_indices_open(): return not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 18))
@@ -56,13 +50,21 @@ def render_market_section(title, symbols, open_status, closed_msg):
         for sym in symbols:
             info = analyze_symbol_full(sym)
             if info:
-                data.append(info)
+                # Filtrar solo las columnas visibles para la tabla
+                data.append({
+                    "Símbolo": info["Símbolo"],
+                    "Precio": info["Precio"],
+                    "Estructura H1": info["Estructura H1"],
+                    "Estructura M5": info["Estructura M5"],
+                    "RSI (M5)": info["RSI (M5)"],
+                    "MACD (M5)": info["MACD (M5)"]
+                })
         
         if data:
             df = pd.DataFrame(data)
             st.dataframe(style_dataframe(df), use_container_width=True)
 
-            st.markdown("#### 🤖 Generar Reporte Ejecutivo con IA")
+            st.markdown("#### 🤖 Generar Informe Ejecutivo con IA Integrada")
             col1, col2 = st.columns([2, 1])
             with col1:
                 selected_sym = st.selectbox(f"Selecciona un activo de {title}:", symbols, key=f"select_{title}")
@@ -72,13 +74,10 @@ def render_market_section(title, symbols, open_status, closed_msg):
                 btn_gen = st.button(f"🤖 Analizar {selected_sym} con IA", key=f"btn_{title}")
 
             if btn_gen:
-                if not gemini_key:
-                    st.warning("⚠️ Por favor, ingresa tu Gemini API Key en el menú lateral izquierdo para usar la IA.")
-                else:
-                    with st.spinner(f"Analizando {selected_sym} y redactando informe de IA..."):
-                        report = generate_ai_report(selected_sym, gemini_key)
-                        st.markdown("---")
-                        st.info(report)
+                with st.spinner(f"Analizando la estructura multitemporal de {selected_sym}..."):
+                    report = generate_ai_report(selected_sym)
+                    st.markdown("---")
+                    st.info(report)
     else:
         st.error(f"🔴 MERCADO CERRADO — {closed_msg}")
 
