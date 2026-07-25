@@ -37,9 +37,9 @@ def style_dataframe(df):
         return ""
 
     try:
-        styler = df.style.map(highlight_status, subset=["Estructura H1", "Estructura M5", "RSI (M5)", "MACD (M5)"])
+        styler = df.style.map(highlight_status, subset=["Tendencia H4", "Pierna H1", "Gatillo M5", "RSI (M5)", "MACD (M5)"])
     except AttributeError:
-        styler = df.style.applymap(highlight_status, subset=["Estructura H1", "Estructura M5", "RSI (M5)", "MACD (M5)"])
+        styler = df.style.applymap(highlight_status, subset=["Tendencia H4", "Pierna H1", "Gatillo M5", "RSI (M5)", "MACD (M5)"])
     return styler
 
 def render_market_section(title, symbols, open_status, closed_msg):
@@ -50,12 +50,12 @@ def render_market_section(title, symbols, open_status, closed_msg):
         for sym in symbols:
             info = analyze_symbol_full(sym)
             if info:
-                # Filtrar solo las columnas visibles para la tabla
                 data.append({
                     "Símbolo": info["Símbolo"],
                     "Precio": info["Precio"],
-                    "Estructura H1": info["Estructura H1"],
-                    "Estructura M5": info["Estructura M5"],
+                    "Tendencia H4": info["Tendencia H4"],
+                    "Pierna H1": info["Pierna H1"],
+                    "Gatillo M5": info["Gatillo M5"],
                     "RSI (M5)": info["RSI (M5)"],
                     "MACD (M5)": info["MACD (M5)"]
                 })
@@ -64,7 +64,7 @@ def render_market_section(title, symbols, open_status, closed_msg):
             df = pd.DataFrame(data)
             st.dataframe(style_dataframe(df), use_container_width=True)
 
-            st.markdown("#### 🤖 Generar Informe Ejecutivo con IA Integrada")
+            st.markdown("#### 🤖 Generar Informe Ejecutivo con IA")
             col1, col2 = st.columns([2, 1])
             with col1:
                 selected_sym = st.selectbox(f"Selecciona un activo de {title}:", symbols, key=f"select_{title}")
@@ -74,7 +74,7 @@ def render_market_section(title, symbols, open_status, closed_msg):
                 btn_gen = st.button(f"🤖 Analizar {selected_sym} con IA", key=f"btn_{title}")
 
             if btn_gen:
-                with st.spinner(f"Analizando la estructura multitemporal de {selected_sym}..."):
+                with st.spinner(f"Analizando la estructura H4, H1 y M5 de {selected_sym}..."):
                     report = generate_ai_report(selected_sym)
                     st.markdown("---")
                     st.info(report)
