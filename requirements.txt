@@ -4,4 +4,4 @@ requests>=2.31.0
 streamlit
 ta
 pytz
-google-genai
+google-generativeai
