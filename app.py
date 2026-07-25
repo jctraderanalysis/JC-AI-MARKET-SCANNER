@@ -64,17 +64,17 @@ def render_market_section(title, symbols, open_status, closed_msg):
             df = pd.DataFrame(data)
             st.dataframe(style_dataframe(df), use_container_width=True)
 
-            st.markdown("#### 🤖 Generar Informe Ejecutivo con IA")
+            st.markdown("#### 🤖 Generar Informe Ejecutivo")
             col1, col2 = st.columns([2, 1])
             with col1:
                 selected_sym = st.selectbox(f"Selecciona un activo de {title}:", symbols, key=f"select_{title}")
             with col2:
                 st.write("")
                 st.write("")
-                btn_gen = st.button(f"🤖 Analizar {selected_sym} con IA", key=f"btn_{title}")
+                btn_gen = st.button(f"🤖 Analizar {selected_sym}", key=f"btn_{title}")
 
             if btn_gen:
-                with st.spinner(f"Analizando la estructura H4, H1 y M5 de {selected_sym}..."):
+                with st.spinner(f"Analizando {selected_sym}..."):
                     report = generate_ai_report(selected_sym)
                     st.markdown("---")
                     st.info(report)
