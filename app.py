@@ -137,7 +137,7 @@ with tab_forex:
     render_market_section("Forex", st.session_state.custom_symbols["FOREX"], is_forex_open(), "Abre el Domingo a las 5:00 PM AST")
 
 with tab_stocks:
-    render_market_section("Acciones Wall Street", st.session_state.custom_symbols["STOCkS"], is_stocks_open(), "Abre el Lunes a las 9:30 AM AST")
+    render_market_section("Acciones Wall Street", st.session_state.custom_symbols["STOCKS"], is_stocks_open(), "Abre el Lunes a las 9:30 AM AST")
 
 with tab_indices:
     render_market_section("Índices", st.session_state.custom_symbols["INDICES"], is_indices_open(), "Abre el Domingo a las 6:00 PM AST")
