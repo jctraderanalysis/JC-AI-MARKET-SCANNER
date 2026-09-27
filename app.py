@@ -27,7 +27,7 @@ st.sidebar.header("⚙️ Gestor de Activos")
 
 # 1. Agregar nuevo activo a una lista
 st.sidebar.subheader("➕ Añadir Activo Manual")
-mercado_destino = st.sidebar.selectbox("Selecciona Categoría:", ["CRYPTO", "FOREX", "ACCIONES", "INDICES"])
+mercado_destino = st.sidebar.selectbox("Selecciona Categoría:", ["CRYPTO", "FOREX", "STOCKS", "INDICES"])
 nuevo_simbolo = st.sidebar.text_input("Símbolo (ej: XLM-USD, TSLA, EURGBP=X):").strip().upper()
 
 if st.sidebar.button("➕ Añadir a la lista", use_container_width=True):
@@ -46,7 +46,7 @@ if st.sidebar.button("🔄 Restablecer listas por defecto", use_container_width=
     st.session_state.custom_symbols = {
         "CRYPTO": list(config.SYMBOLS.get("CRYPTO", ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD"])),
         "FOREX": list(config.SYMBOLS.get("FOREX", ["EURUSD=X", "GBPUSD=X", "AUDUSD=X"])),
-        "STOCKS": list(config.SYMBOLS.get("ACCIONES", ["NVDA", "TSLA", "AAPL"])),
+        "STOCKS": list(config.SYMBOLS.get("STOCKS", ["NVDA", "TSLA", "AAPL"])),
         "INDICES": list(config.SYMBOLS.get("INDICES", ["^GSPC", "^DJI"]))
     }
     st.sidebar.info("Listas restablecidas.")
