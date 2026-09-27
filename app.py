@@ -6,10 +6,18 @@ import main
 import config
 from scanner import analyze_symbol_full, generate_ai_report
 
+# Importamos el componente de auto-refresco
+from streamlit_autorefresh import st_autorefresh
+
 st.set_page_config(page_title="JC AI MARKET SCANNER PRO", page_icon="📈", layout="wide")
 
 st.title("🚀 JC AI MARKET SCANNER PRO")
 st.caption("Copyright 2026, JESUS CRUZ")
+
+# 🔄 AUTO-REFRESCO AUTOMÁTICO
+# Actualiza la página automáticamente cada 60.000 ms (1 minuto)
+# Puedes cambiar 60000 por 30000 si prefieres cada 30 segundos
+count = st_autorefresh(interval=60000, limit=100, key="market_scanner_autorefresh")
 
 main.start_background_scanner()
 
@@ -25,7 +33,6 @@ if "custom_symbols" not in st.session_state:
 # --- BARRA LATERAL: GESTOR DE ACTIVOS Y BÚSQUEDA ---
 st.sidebar.header("⚙️ Gestor de Activos")
 
-# 1. Agregar nuevo activo a una lista
 st.sidebar.subheader("➕ Añadir Activo Manual")
 mercado_destino = st.sidebar.selectbox("Selecciona Categoría:", ["CRYPTO", "FOREX", "ACCIONES", "INDICES"])
 nuevo_simbolo = st.sidebar.text_input("Símbolo (ej: XLM-USD, TSLA, EURGBP=X):").strip().upper()
@@ -41,12 +48,11 @@ if st.sidebar.button("➕ Añadir a la lista", use_container_width=True):
     else:
         st.sidebar.error("Escribe un símbolo válido.")
 
-# 2. Resetear listas
 if st.sidebar.button("🔄 Restablecer listas por defecto", use_container_width=True):
     st.session_state.custom_symbols = {
         "CRYPTO": list(config.SYMBOLS.get("CRYPTO", ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD"])),
         "FOREX": list(config.SYMBOLS.get("FOREX", ["EURUSD=X", "GBPUSD=X", "AUDUSD=X"])),
-        "STOCKS": list(config.SYMBOLS.get("ACCIONES", ["NVDA", "TSLA", "AAPL"])),
+        "STOCKS": list(config.SYMBOLS.get("STOCKS", ["NVDA", "TSLA", "AAPL"])),
         "INDICES": list(config.SYMBOLS.get("INDICES", ["^GSPC", "^DJI"]))
     }
     st.sidebar.info("Listas restablecidas.")
@@ -60,7 +66,7 @@ now_ast = datetime.datetime.now(tz_ast)
 weekday = now_ast.weekday()
 hour = now_ast.hour
 
-st.write(f"🕒 **Hora actual (Puerto Rico):** {now_ast.strftime('%Y-%m-%d %I:%M:%S %p AST')}")
+st.write(f"🕒 **Última actualización:** {now_ast.strftime('%Y-%m-%d %I:%M:%S %p AST')}")
 
 def is_crypto_open(): return True
 def is_forex_open(): return not (weekday == 5 or (weekday == 4 and hour >= 17) or (weekday == 6 and hour < 17))
