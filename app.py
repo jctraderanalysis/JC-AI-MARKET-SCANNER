@@ -18,7 +18,7 @@ if "custom_symbols" not in st.session_state:
     st.session_state.custom_symbols = {
         "CRYPTO": list(config.SYMBOLS.get("CRYPTO", ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD"])),
         "FOREX": list(config.SYMBOLS.get("FOREX", ["EURUSD=X", "GBPUSD=X", "AUDUSD=X"])),
-        "STOCKS": list(config.SYMBOLS.get("STOCKS", ["NVDA", "TSLA", "AAPL"])),
+        "STOCKS": list(config.SYMBOLS.get("ACCIONES", ["NVDA", "TSLA", "AAPL"])),
         "INDICES": list(config.SYMBOLS.get("INDICES", ["^GSPC", "^DJI"]))
     }
 
@@ -27,7 +27,7 @@ st.sidebar.header("⚙️ Gestor de Activos")
 
 # 1. Agregar nuevo activo a una lista
 st.sidebar.subheader("➕ Añadir Activo Manual")
-mercado_destino = st.sidebar.selectbox("Selecciona Categoría:", ["CRYPTO", "FOREX", "STOCKS", "INDICES"])
+mercado_destino = st.sidebar.selectbox("Selecciona Categoría:", ["CRYPTO", "FOREX", "ACCIONES", "INDICES"])
 nuevo_simbolo = st.sidebar.text_input("Símbolo (ej: XLM-USD, TSLA, EURGBP=X):").strip().upper()
 
 if st.sidebar.button("➕ Añadir a la lista", use_container_width=True):
@@ -46,7 +46,7 @@ if st.sidebar.button("🔄 Restablecer listas por defecto", use_container_width=
     st.session_state.custom_symbols = {
         "CRYPTO": list(config.SYMBOLS.get("CRYPTO", ["BTC-USD", "ETH-USD", "SOL-USD", "XRP-USD", "ADA-USD"])),
         "FOREX": list(config.SYMBOLS.get("FOREX", ["EURUSD=X", "GBPUSD=X", "AUDUSD=X"])),
-        "STOCKS": list(config.SYMBOLS.get("STOCKS", ["NVDA", "TSLA", "AAPL"])),
+        "STOCKS": list(config.SYMBOLS.get("ACCIONES", ["NVDA", "TSLA", "AAPL"])),
         "INDICES": list(config.SYMBOLS.get("INDICES", ["^GSPC", "^DJI"]))
     }
     st.sidebar.info("Listas restablecidas.")
@@ -137,7 +137,7 @@ with tab_forex:
     render_market_section("Forex", st.session_state.custom_symbols["FOREX"], is_forex_open(), "Abre el Domingo a las 5:00 PM AST")
 
 with tab_stocks:
-    render_market_section("Acciones Wall Street", st.session_state.custom_symbols["STOCKS"], is_stocks_open(), "Abre el Lunes a las 9:30 AM AST")
+    render_market_section("Acciones Wall Street", st.session_state.custom_symbols["ACCIONES"], is_stocks_open(), "Abre el Lunes a las 9:30 AM AST")
 
 with tab_indices:
     render_market_section("Índices", st.session_state.custom_symbols["INDICES"], is_indices_open(), "Abre el Domingo a las 6:00 PM AST")
